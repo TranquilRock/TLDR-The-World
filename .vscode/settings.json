@@ -1,0 +1,8 @@
+{
+    "python-envs.defaultEnvManager": "ms-python.python:venv",
+    "chat.tools.terminal.autoApprove": {
+        "pytest": true,
+        "/Users/andy/Documents/TLDR-The-World/.venv/bin/black": true,
+        "/Users/andy/Documents/TLDR-The-World/.venv/bin/isort": true
+    }
+}

@@ -16,7 +16,7 @@ class FeedItem(TypedDict):
     source_name: str
 
 
-class AbstractSource(ABC):
+class AbstractSource(ABC):  # pylint: disable=too-few-public-methods
     """Interface that every ingestion source must implement."""
 
     @abstractmethod

@@ -5,7 +5,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 
 
-class AbstractNotifier(ABC):
+class AbstractNotifier(ABC):  # pylint: disable=too-few-public-methods
     """Interface that every delivery channel must implement."""
 
     @abstractmethod

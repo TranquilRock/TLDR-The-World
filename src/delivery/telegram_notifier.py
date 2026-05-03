@@ -1,4 +1,4 @@
-"""Telegram delivery channel – concrete implementation of :class:`AbstractNotifier`.
+"""Telegram delivery channel - concrete implementation of :class:`AbstractNotifier`.
 
 Sends the daily briefing as one or more Telegram messages using the Bot API.
 Long messages (> 4096 characters) are automatically split into chunks.
@@ -46,45 +46,61 @@ def escape_markdown_v2(text: str) -> str:
 
 
 def split_message(text: str, max_length: int = MAX_MESSAGE_LENGTH) -> list[str]:
-    """Split *text* into chunks no longer than *max_length* characters.
+    """Split *text* into chunks that remain valid after MarkdownV2 escaping.
 
-    Splits are made on newline boundaries where possible to avoid breaking
-    mid-sentence.
-
-    Args:
-        text: The full message text.
-        max_length: Maximum characters per chunk.
-
-    Returns:
-        A list of string chunks, each at most *max_length* characters long.
+    We build chunks from the original (unescaped) text by joining lines until
+    escaping the tentative chunk would exceed *max_length*. If a single line
+    after escaping is still too long, we hard-split the escaped line while
+    ensuring no chunk ends with a dangling backslash (which would break
+    MarkdownV2 parsing).
     """
-    if len(text) <= max_length:
-        return [text]
+    # Fast-path: whole message fits after escaping
+    full_escaped = escape_markdown_v2(text)
+    if len(full_escaped) <= max_length:
+        return [full_escaped]
 
     chunks: list[str] = []
-    current_chunk: list[str] = []
-    current_length: int = 0
+    current_lines: list[str] = []
+
+    def _flush_current() -> None:
+        if not current_lines:
+            return
+        escaped: str = escape_markdown_v2("".join(current_lines))
+        chunks.append(escaped)
+        current_lines.clear()
 
     for line in text.splitlines(keepends=True):
-        if current_length + len(line) > max_length:
-            if current_chunk:
-                chunks.append("".join(current_chunk))
-                current_chunk = []
-                current_length = 0
-            # If a single line exceeds max_length, hard-split it.
-            while len(line) > max_length:
-                chunks.append(line[:max_length])
-                line = line[max_length:]
-        current_chunk.append(line)
-        current_length += len(line)
+        tentative = "".join(current_lines) + line
+        if len(escape_markdown_v2(tentative)) <= max_length:
+            current_lines.append(line)
+            continue
 
-    if current_chunk:
-        chunks.append("".join(current_chunk))
+        # Tentative chunk would be too long. Flush existing lines first.
+        if current_lines:
+            _flush_current()
 
+        # Now handle the overflowing line itself.
+        escaped_line = escape_markdown_v2(line)
+        if len(escaped_line) <= max_length:
+            current_lines.append(line)
+            continue
+
+        # Hard-split the escaped line into safe pieces.
+        s: str = escaped_line
+        while len(s) > 0:
+            part: str = s[:max_length]
+            # Avoid leaving a trailing single backslash at end of chunk.
+            if part.endswith("\\") and len(s) > len(part):
+                # extend by one char if possible to complete the escape.
+                part = s[: len(part) + 1]
+            chunks.append(part)
+            s = s[len(part) :]
+
+    _flush_current()
     return chunks
 
 
-class TelegramNotifier(AbstractNotifier):
+class TelegramNotifier(AbstractNotifier):  # pylint: disable=too-few-public-methods
     """Send messages to a Telegram chat via the Bot HTTP API.
 
     Args:
@@ -117,8 +133,9 @@ class TelegramNotifier(AbstractNotifier):
         Args:
             message: The formatted briefing text.
         """
-        escaped = escape_markdown_v2(message)
-        chunks = split_message(escaped)
+        # Split the original message into chunks that remain valid after
+        # escaping, then send each escaped chunk.
+        chunks = split_message(message)
 
         logger.info(
             "Sending %d message chunk(s) to Telegram chat %s.",
@@ -134,7 +151,12 @@ class TelegramNotifier(AbstractNotifier):
     # ------------------------------------------------------------------
 
     def _send_chunk(self, text: str, *, part: int, total: int) -> None:
-        """Send a single chunk to Telegram, retrying once on failure."""
+        """Send a single chunk to Telegram, retrying once on transient errors.
+
+        On the first failure we attempt a single retry. All errors are logged
+        with context before being re-raised so callers can decide to abort the
+        pipeline.
+        """
         url = f"{self._api_base}/sendMessage"
         payload = {
             "chat_id": self._chat_id,
@@ -143,24 +165,45 @@ class TelegramNotifier(AbstractNotifier):
             "disable_web_page_preview": True,
         }
 
-        try:
-            response = requests.post(url, json=payload, timeout=TELEGRAM_API_TIMEOUT)
-            response.raise_for_status()
-            logger.info("Sent chunk %d/%d successfully.", part, total)
-        except requests.HTTPError as exc:
-            logger.error(
-                "Telegram API error sending chunk %d/%d: %s – response: %s",
-                part,
-                total,
-                exc,
-                exc.response.text if exc.response is not None else "N/A",
-            )
-            raise
-        except Exception as exc:  # noqa: BLE001
-            logger.error(
-                "Unexpected error sending chunk %d/%d to Telegram: %s",
-                part,
-                total,
-                exc,
-            )
-            raise
+        for attempt in (1, 2):
+            try:
+                response = requests.post(
+                    url, json=payload, timeout=TELEGRAM_API_TIMEOUT
+                )
+                response.raise_for_status()
+                logger.info("Sent chunk %d/%d successfully.", part, total)
+                return
+            except requests.HTTPError as exc:
+                if attempt == 1:
+                    resp_text = exc.response.text if exc.response is not None else "N/A"
+                    logger.warning(
+                        "Telegram API HTTP error sending chunk %d/%d; retrying",
+                        part,
+                        total,
+                    )
+                    continue
+                resp_text = exc.response.text if exc.response is not None else "N/A"
+                logger.error(
+                    "Telegram API error sending chunk %d/%d; response: %s",
+                    part,
+                    total,
+                    resp_text,
+                )
+                raise
+            except Exception as exc:  # noqa: BLE001
+                if attempt == 1:
+                    logger.warning(
+                        "Unexpected error sending chunk %d/%d to Telegram: %s; "
+                        "retrying once",
+                        part,
+                        total,
+                        exc,
+                    )
+                    continue
+                logger.error(
+                    "Unexpected error sending chunk %d/%d to Telegram: %s",
+                    part,
+                    total,
+                    exc,
+                )
+                raise

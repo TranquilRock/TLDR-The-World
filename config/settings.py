@@ -8,11 +8,14 @@ misconfiguration is caught immediately before any network calls are made.
 from __future__ import annotations
 
 import json
+import logging
 from pathlib import Path
 from typing import Any
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+logger = logging.getLogger(__name__)
 
 
 class Settings(BaseSettings):
@@ -72,13 +75,32 @@ def load_sources(sources_path: Path | None = None) -> list[dict[str, Any]]:
     if sources_path is None:
         sources_path = Path(__file__).parent / "sources.json"
 
-    with sources_path.open(encoding="utf-8") as fh:
-        data: dict[str, Any] = json.load(fh)
+    try:
+        with sources_path.open(encoding="utf-8") as fh:
+            data: dict[str, Any] = json.load(fh)
+    except Exception as exc:  # pylint: disable=broad-except
+        logger.error("Failed to read sources.json at %s: %s", sources_path, exc)
+        return []
 
-    return data.get("rss_feeds", [])
+    raw_feeds = data.get("rss_feeds", [])
+    valid_feeds: list[dict[str, Any]] = []
+    for idx, entry in enumerate(raw_feeds):
+        if not isinstance(entry, dict):
+            logger.warning("sources.json: entry %d is not an object, skipping", idx)
+            continue
+        name = entry.get("name")
+        url = entry.get("url")
+        if not name or not url or not isinstance(name, str) or not isinstance(url, str):
+            logger.warning(
+                "sources.json: entry %d missing or invalid 'name'/'url', skipping", idx
+            )
+            continue
+        valid_feeds.append({"name": name, "url": url})
+
+    return valid_feeds
 
 
-_settings_instance: Settings | None = None
+_SETTINGS_INSTANCE: Settings | None = None
 
 
 def get_settings() -> Settings:
@@ -88,7 +110,7 @@ def get_settings() -> Settings:
     Pydantic from raising validation errors during import when environment
     variables are not yet set (e.g., in unit tests or static analysis).
     """
-    global _settings_instance  # noqa: PLW0603
-    if _settings_instance is None:
-        _settings_instance = Settings()  # type: ignore[call-arg]
-    return _settings_instance
+    global _SETTINGS_INSTANCE  # pylint: disable=global-statement
+    if _SETTINGS_INSTANCE is None:
+        _SETTINGS_INSTANCE = Settings()  # type: ignore[call-arg]
+    return _SETTINGS_INSTANCE

@@ -7,7 +7,7 @@ from abc import ABC, abstractmethod
 from src.ingestion.base import FeedItem
 
 
-class AbstractProcessor(ABC):
+class AbstractProcessor(ABC):  # pylint: disable=too-few-public-methods
     """Interface that every processing strategy must implement."""
 
     @abstractmethod

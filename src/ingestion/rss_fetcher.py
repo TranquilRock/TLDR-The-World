@@ -1,4 +1,4 @@
-"""RSS feed fetcher – concrete implementation of :class:`AbstractSource`."""
+"""RSS feed fetcher - concrete implementation of :class:`AbstractSource`."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 REQUEST_TIMEOUT: int = 15  # seconds
 
 
-class RssFetcher(AbstractSource):
+class RssFetcher(AbstractSource):  # pylint: disable=too-few-public-methods
     """Fetch and normalise entries from a single RSS / Atom feed URL.
 
     Args:
@@ -45,7 +45,7 @@ class RssFetcher(AbstractSource):
         logger.info("Fetching RSS feed: %s (%s)", self.name, self.url)
         try:
             raw_content = self._download_feed()
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # pylint: disable=broad-except
             logger.warning(
                 "Failed to download feed '%s' from %s: %s",
                 self.name,
@@ -56,7 +56,7 @@ class RssFetcher(AbstractSource):
 
         try:
             return self._parse_feed(raw_content)
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:  # pylint: disable=broad-except
             logger.warning(
                 "Failed to parse feed '%s': %s",
                 self.name,
@@ -86,9 +86,7 @@ class RssFetcher(AbstractSource):
         for entry in parsed.entries[: self.max_items]:
             items.append(self._normalise_entry(entry))
 
-        logger.info(
-            "Feed '%s': fetched %d item(s).", self.name, len(items)
-        )
+        logger.info("Feed '%s': fetched %d item(s).", self.name, len(items))
         return items
 
     def _normalise_entry(self, entry: Any) -> FeedItem:
@@ -98,16 +96,12 @@ class RssFetcher(AbstractSource):
 
         # feedparser exposes several possible summary fields.
         summary: str = (
-            getattr(entry, "summary", "")
-            or getattr(entry, "description", "")
-            or ""
+            getattr(entry, "summary", "") or getattr(entry, "description", "") or ""
         )
 
         # Prefer a pre-formatted date string; fall back to an empty string.
         published_date: str = (
-            getattr(entry, "published", "")
-            or getattr(entry, "updated", "")
-            or ""
+            getattr(entry, "published", "") or getattr(entry, "updated", "") or ""
         )
 
         return FeedItem(

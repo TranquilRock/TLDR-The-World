@@ -56,12 +56,10 @@ def fetch_all_feeds(sources: list[dict]) -> list[FeedItem]:
                 items = future.result()
                 logger.info("Feed '%s' returned %d item(s).", feed_name, len(items))
                 all_items.extend(items)
-            except Exception as exc:  # noqa: BLE001
+            except Exception as exc:  # pylint: disable=broad-except
                 # RssFetcher.fetch already handles its own exceptions; this is a
                 # safety net in case of unexpected errors in the executor itself.
-                logger.error(
-                    "Unexpected error fetching feed '%s': %s", feed_name, exc
-                )
+                logger.error("Unexpected error fetching feed '%s': %s", feed_name, exc)
 
     return all_items
 
@@ -73,7 +71,7 @@ def run_pipeline() -> None:
     # 1. Configuration -------------------------------------------------------
     try:
         settings = get_settings()
-    except Exception as exc:
+    except Exception as exc:  # pylint: disable=broad-except
         logger.critical("Failed to load settings: %s", exc)
         sys.exit(1)
 
@@ -103,7 +101,7 @@ def run_pipeline() -> None:
     )
     try:
         notifier.send(briefing)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:  # pylint: disable=broad-except
         logger.error("Telegram delivery failed: %s", exc)
         sys.exit(1)
 

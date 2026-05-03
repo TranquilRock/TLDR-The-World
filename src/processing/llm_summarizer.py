@@ -58,7 +58,7 @@ USER_PROMPT_TEMPLATE = """\
 """
 
 
-class LlmSummarizer(AbstractProcessor):
+class LlmSummarizer(AbstractProcessor):  # pylint: disable=too-few-public-methods
     """Filter and summarise feed items using GitHub Models (OpenAI SDK).
 
     Args:
@@ -67,7 +67,8 @@ class LlmSummarizer(AbstractProcessor):
 
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
-        self._client = OpenAI(
+        # OpenAI client object - typed as Any because SDK types may vary.
+        self._client: Any = OpenAI(
             api_key=settings.github_models_token,
             base_url=settings.github_models_base_url,
         )
@@ -117,7 +118,36 @@ class LlmSummarizer(AbstractProcessor):
             logger.error("LLM API call failed: %s", exc)
             raise RuntimeError(f"LLM API call failed: {exc}") from exc
 
-        result = response.choices[0].message.content or ""
+        # Robustly extract text content from different SDK/response shapes.
+        def _extract_content(resp: Any) -> str:
+            # dict-like response (e.g., when using a requests wrapper)
+            if isinstance(resp, dict):
+                choices_var = resp.get("choices") or []
+                if not isinstance(choices_var, list) or not choices_var:
+                    return ""
+                first = choices_var[0]
+                if isinstance(first, dict):
+                    msg = first.get("message") or {}
+                    return msg.get("content") or first.get("text") or ""
+                return ""
+
+            # object-like response from SDK
+            choices = getattr(resp, "choices", None)
+            if not choices:
+                return ""
+            first = choices[0]
+            message = getattr(first, "message", None)
+            if message is not None:
+                return getattr(message, "content", "") or ""
+            return getattr(first, "text", "") or ""
+
+        result: str = _extract_content(response)
+        if not result:
+            logger.error(
+                "LLM API returned empty content or unexpected shape: %r", response
+            )
+            raise RuntimeError("LLM API returned no content")
+
         logger.info("LLM processing complete. Output length: %d chars.", len(result))
         return result
 
