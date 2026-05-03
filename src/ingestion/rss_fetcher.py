@@ -13,7 +13,7 @@ from src.ingestion.base import AbstractSource, FeedItem
 logger = logging.getLogger(__name__)
 
 # Conservative defaults to avoid hammering servers or hanging the pipeline.
-_REQUEST_TIMEOUT: int = 15  # seconds
+REQUEST_TIMEOUT: int = 15  # seconds
 
 
 class RssFetcher(AbstractSource):
@@ -72,7 +72,7 @@ class RssFetcher(AbstractSource):
         """Download the raw feed bytes via *requests* (respects timeout)."""
         response = requests.get(
             self.url,
-            timeout=_REQUEST_TIMEOUT,
+            timeout=REQUEST_TIMEOUT,
             headers={"User-Agent": "TLDR-The-World/1.0 (RSS Pipeline)"},
         )
         response.raise_for_status()

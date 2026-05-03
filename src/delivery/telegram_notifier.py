@@ -19,12 +19,12 @@ from src.delivery.base import AbstractNotifier
 logger = logging.getLogger(__name__)
 
 # Telegram MarkdownV2 characters that must be escaped.
-_MARKDOWN_V2_SPECIAL_CHARS: str = r"_*[]()~`>#+-=|{}.!"
+MARKDOWN_V2_SPECIAL_CHARS: str = r"_*[]()~`>#+-=|{}.!"
 
 # Telegram message length limit (characters).
-_MAX_MESSAGE_LENGTH: int = 4096
+MAX_MESSAGE_LENGTH: int = 4096
 
-_TELEGRAM_API_TIMEOUT: int = 30  # seconds
+TELEGRAM_API_TIMEOUT: int = 30  # seconds
 
 
 def escape_markdown_v2(text: str) -> str:
@@ -40,12 +40,12 @@ def escape_markdown_v2(text: str) -> str:
     Returns:
         Escaped text safe to send with ``parse_mode="MarkdownV2"``.
     """
-    for char in _MARKDOWN_V2_SPECIAL_CHARS:
+    for char in MARKDOWN_V2_SPECIAL_CHARS:
         text = text.replace(char, f"\\{char}")
     return text
 
 
-def split_message(text: str, max_length: int = _MAX_MESSAGE_LENGTH) -> list[str]:
+def split_message(text: str, max_length: int = MAX_MESSAGE_LENGTH) -> list[str]:
     """Split *text* into chunks no longer than *max_length* characters.
 
     Splits are made on newline boundaries where possible to avoid breaking
@@ -144,7 +144,7 @@ class TelegramNotifier(AbstractNotifier):
         }
 
         try:
-            response = requests.post(url, json=payload, timeout=_TELEGRAM_API_TIMEOUT)
+            response = requests.post(url, json=payload, timeout=TELEGRAM_API_TIMEOUT)
             response.raise_for_status()
             logger.info("Sent chunk %d/%d successfully.", part, total)
         except requests.HTTPError as exc:

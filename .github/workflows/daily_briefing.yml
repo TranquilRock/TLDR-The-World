@@ -10,6 +10,8 @@ jobs:
   run-pipeline:
     name: Fetch, Summarise & Deliver Briefing
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
 
     steps:
       - name: Checkout repository

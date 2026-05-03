@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 # Prompt templates
 # ---------------------------------------------------------------------------
 
-_SYSTEM_PROMPT = """\
+SYSTEM_PROMPT = """\
 You are an expert intelligence analyst and editor.
 
 Your task:
@@ -51,7 +51,7 @@ Your task:
    "今日無高信號情報。"
 """
 
-_USER_PROMPT_TEMPLATE = """\
+USER_PROMPT_TEMPLATE = """\
 以下是今日從各 RSS 來源收集到的新聞條目，請依照指示進行過濾與摘要：
 
 {items_json}
@@ -99,7 +99,7 @@ class LlmSummarizer(AbstractProcessor):
         )
 
         items_payload = self._build_payload(items)
-        user_content = _USER_PROMPT_TEMPLATE.format(
+        user_content = USER_PROMPT_TEMPLATE.format(
             items_json=json.dumps(items_payload, ensure_ascii=False, indent=2)
         )
 
@@ -107,7 +107,7 @@ class LlmSummarizer(AbstractProcessor):
             response = self._client.chat.completions.create(
                 model=self._settings.llm_model,
                 messages=[
-                    {"role": "system", "content": _SYSTEM_PROMPT},
+                    {"role": "system", "content": SYSTEM_PROMPT},
                     {"role": "user", "content": user_content},
                 ],
                 temperature=0.3,
