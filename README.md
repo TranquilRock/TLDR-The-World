@@ -5,6 +5,41 @@
 TLDR-The-World is a Python 3.11 pipeline that collects RSS feeds, filters and
 summarizes them with GitHub Models, and delivers the briefing through Telegram.
 
+The pipeline is designed to stay lightweight and readable:
+
+- RSS feeds are fetched concurrently and capped per source before LLM processing.
+- Feed items are summarised in two passes to avoid token limit issues.
+- Telegram delivery uses structured MarkdownV2 rendering so the final message
+ stays readable without breaking entity parsing.
+
+## Configuration
+
+The application reads configuration from environment variables. For GitHub
+Actions, use repository secrets for sensitive values and repository variables
+for non-sensitive defaults.
+
+Required secrets:
+
+- `MODELS_API_TOKEN`
+- `TELEGRAM_BOT_TOKEN`
+- `TELEGRAM_CHAT_ID`
+
+Optional repository variables:
+
+- `MODELS_BASE_URL` with default `https://models.inference.ai.azure.com`
+- `LLM_MODEL` with default `gpt-4o-mini`
+- `RSS_MAX_ITEMS_PER_SOURCE` with default `8`
+
+For local development, place the same values in your shell environment or a
+`.env` file.
+
+## Run Locally
+
+```bash
+source .venv/bin/activate
+python -m src.main
+```
+
 ## Local Checks
 
 Use the project virtual environment and run the same checks that CI uses:
@@ -17,6 +52,12 @@ python -m pylint src/ config/ tests/
 pyright
 python -m pytest -q
 ```
+
+## GitHub Actions
+
+The daily workflow lives in [`.github/workflows/daily_briefing.yml`](.github/workflows/daily_briefing.yml).
+It reads the required secrets above and applies repository-variable defaults for
+the non-sensitive configuration values.
 
 ## Pylint
 
