@@ -42,6 +42,11 @@ class Settings(BaseSettings):
         default="gpt-4o-mini",
         description="Model identifier to use for summarisation.",
     )
+    rss_max_items_per_source: int = Field(
+        default=8,
+        ge=1,
+        description="Maximum RSS items to keep per source before LLM processing.",
+    )
 
     # --- Telegram ---
     telegram_bot_token: str = Field(

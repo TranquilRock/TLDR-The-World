@@ -29,7 +29,7 @@ def test_process_empty_response_returns_no_content() -> None:
     mock_client.chat.completions.create.return_value = {"choices": []}
     s._client = mock_client
     result = s.process([make_feed_item()])
-    assert result == "今日無高信號情報。"
+    assert result == "No high-signal intelligence today."
 
 
 def test_process_returns_content() -> None:
@@ -42,14 +42,14 @@ def test_process_returns_content() -> None:
     s = LlmSummarizer(settings)
     mock_client = Mock()
     # First call: per-item summariser returns a JSON object as string
-    per_item_json = '{"title":"t","one_line_summary":"摘要","tag":"#AIAgent","link":"l","source":"n"}'
+    per_item_json = '{"title":"t","one_line_summary":"summary","tag":"#AIAgent","link":"l","source":"n"}'
     per_item_resp = {"choices": [{"message": {"content": per_item_json}}]}
     # Second call: aggregation returns the final briefing text
-    aggregation_resp = {"choices": [{"message": {"content": "最終簡報內容"}}]}
+    aggregation_resp = {"choices": [{"message": {"content": "Final briefing content"}}]}
     mock_client.chat.completions.create.side_effect = [per_item_resp, aggregation_resp]
     s._client = mock_client
     result = s.process([make_feed_item()])
-    assert "最終簡報內容" in result
+    assert "Final briefing content" in result
 
 
 def test_model_called_n_plus_one_times() -> None:
@@ -62,9 +62,9 @@ def test_model_called_n_plus_one_times() -> None:
     s = LlmSummarizer(settings)
     mock_client = Mock()
     # per-item response JSON and aggregation response
-    per_item_json = '{"title":"t","one_line_summary":"摘要","tag":"#AIAgent","link":"l","source":"n"}'
+    per_item_json = '{"title":"t","one_line_summary":"summary","tag":"#AIAgent","link":"l","source":"n"}'
     per_item_resp = {"choices": [{"message": {"content": per_item_json}}]}
-    aggregation_resp = {"choices": [{"message": {"content": "最終簡報內容"}}]}
+    aggregation_resp = {"choices": [{"message": {"content": "Final briefing content"}}]}
 
     n = 3
     # side_effect: n per-item responses, then one aggregation response
@@ -78,4 +78,4 @@ def test_model_called_n_plus_one_times() -> None:
 
     # model should be called once per item, plus one aggregation call
     assert mock_client.chat.completions.create.call_count == n + 1
-    assert "最終簡報內容" in result
+    assert "Final briefing content" in result

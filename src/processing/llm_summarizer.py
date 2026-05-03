@@ -1,12 +1,10 @@
 """LLM-based summarizer using GitHub Models (OpenAI-compatible API).
 
-The summarizer sends all collected feed items to an LLM and asks it to
-filter for relevance and produce a structured daily briefing in Traditional
-Chinese (繁體中文).
+The summarizer sends collected feed items to an LLM, filters for relevance,
+and produces a structured daily briefing in English.
 """
 
 from __future__ import annotations
-
 import json
 import logging
 from typing import Any
@@ -29,44 +27,46 @@ You are an expert intelligence analyst and editor.
 Your task:
 1. Review the list of news items provided by the user (formatted as JSON).
 2. Keep ONLY those that are highly relevant to either:
-   - "AI Agents / AI Technology" (e.g., new models, agentic frameworks, AI safety,
-     LLM research, robotics driven by AI, etc.)
-   - "Major Geopolitics" (e.g., US–China relations, US–Iran relations, NATO, wars,
-     sanctions, diplomatic breakthroughs, major elections with global impact, etc.)
+    - "AI Agents / AI Technology" (e.g., new models, agentic frameworks, AI safety,
+      LLM research, robotics driven by AI, etc.)
+    - "Major Geopolitics" (e.g., US–China relations, US–Iran relations, NATO, wars,
+      sanctions, diplomatic breakthroughs, major elections with global impact, etc.)
 3. Discard clickbait, opinion pieces without substance, celebrity gossip, and items
-   that have no clear relevance to the two categories above.
-4. For each SELECTED item, produce a structured entry in **Traditional Chinese (繁體中文)**
-   with the following format:
+    that have no clear relevance to the two categories above.
+4. For each SELECTED item, produce a structured entry in English with the
+    following format:
 
 ---
-**標題**：<A concise, catchy title in Traditional Chinese>
-**標籤**：`#AIAgent` `#Geopolitics` (pick the most relevant tags)
-**一句重點**：<One-sentence takeaway in Traditional Chinese>
-**原始連結**：<original URL>
+**Title**: <A concise, catchy title in English>
+**Tags**: `#AIAgent` `#Geopolitics` (pick the most relevant tags)
+**One-line takeaway**: <One-sentence takeaway in English>
+**Original link**: <original URL>
 ---
 
-5. Begin the entire output with a brief daily briefing header in Traditional Chinese,
-   for example: "📰 每日情報簡報 — <date>"
+5. Begin the entire output with a brief daily briefing header in English,
+    for example: "📰 Daily Intelligence Briefing — <date>"
 6. If NO items pass the relevance filter, reply with a single line:
-   "今日無高信號情報。"
+    "No high-signal intelligence today."
 """
 
 USER_PROMPT_TEMPLATE = """\
-以下是今日從各 RSS 來源收集到的新聞條目，請依照指示進行過濾與摘要：
+Below are today's news items collected from various RSS sources. Please
+filter and summarise them according to the instructions.
 
 {items_json}
 """
 
 # Prompt for per-item compact summarisation (returns JSON list)
 PER_ITEM_PROMPT = """\
-你是一個資訊整理員。對於使用者提供的單篇新聞條目（JSON 格式），請產生一個簡潔的 JSON 物件，包含欄位：
+You are an information curator. Given a single news item (as JSON), produce
+one compact JSON object with the following fields:
 
-- `title`: 標題
-- `one_line_summary`: 一句重點（繁體中文，最多 30 字）
-- `tag`: `#AIAgent` 或 `#Geopolitics` 或 `#Other`（只選最相關）
-- `link`: 原始連結
+- `title`: the headline
+- `one_line_summary`: a one-sentence takeaway in English (max 30 words)
+- `tag`: one of `#AIAgent`, `#Geopolitics`, or `#Other` (choose the most relevant)
+- `link`: the original URL
 
-回傳結果必須是單一個 JSON 物件，形如 {"title": ..., "one_line_summary": ..., "tag": ..., "link": ...}，不要包含其他文字或說明。
+Return exactly one JSON object, e.g. {"title": ..., "one_line_summary": ..., "tag": ..., "link": ...} and nothing else.
 """
 
 
@@ -96,14 +96,14 @@ class LlmSummarizer(AbstractProcessor):  # pylint: disable=too-few-public-method
             items: Raw feed items collected from all sources.
 
         Returns:
-            A formatted briefing string in Traditional Chinese.
+            A formatted briefing string in English.
 
         Raises:
             RuntimeError: If the LLM API call fails.
         """
         if not items:
             logger.warning("No feed items to process; skipping LLM call.")
-            return "今日無高信號情報。"
+            return "No high-signal intelligence today."
 
         logger.info(
             "Processing %d item(s) with batched per-item summarisation using model '%s'.",
@@ -131,7 +131,7 @@ class LlmSummarizer(AbstractProcessor):  # pylint: disable=too-few-public-method
             logger.warning(
                 "No per-item summaries produced; skipping final aggregation."
             )
-            return "今日無高信號情報。"
+            return "No high-signal intelligence today."
 
         # 2) Second pass: aggregate the compact summaries into final briefing
         logger.info(
@@ -222,7 +222,7 @@ class LlmSummarizer(AbstractProcessor):  # pylint: disable=too-few-public-method
         }
 
         user_content = (
-            "請根據以下單一新聞條目產生簡潔摘要（見說明）：\n\n"
+            "Please produce a compact summary for the following single news item (see instructions):\n\n"
             + json.dumps(payload, ensure_ascii=False)
         )
 

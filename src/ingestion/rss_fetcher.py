@@ -24,10 +24,10 @@ class RssFetcher(AbstractSource):  # pylint: disable=too-few-public-methods
               ``source_name`` on each :class:`FeedItem`).
         url:  Full URL of the RSS / Atom feed.
         max_items: Maximum number of items to return per fetch.  Defaults to
-                   20 to keep LLM prompt sizes manageable.
+               8 to keep LLM prompt sizes manageable.
     """
 
-    def __init__(self, name: str, url: str, max_items: int = 20) -> None:
+    def __init__(self, name: str, url: str, max_items: int = 8) -> None:
         self.name = name
         self.url = url
         self.max_items = max_items

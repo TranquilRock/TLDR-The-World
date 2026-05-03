@@ -30,7 +30,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def fetch_all_feeds(sources: list[dict]) -> list[FeedItem]:
+def fetch_all_feeds(
+    sources: list[dict], max_items_per_source: int = 8
+) -> list[FeedItem]:
     """Fetch all configured RSS feeds in parallel.
 
     Individual feed failures are caught inside :class:`RssFetcher` and result
@@ -44,7 +46,10 @@ def fetch_all_feeds(sources: list[dict]) -> list[FeedItem]:
         Combined list of :class:`FeedItem` objects from all sources.
     """
     all_items: list[FeedItem] = []
-    fetchers = [RssFetcher(name=s["name"], url=s["url"]) for s in sources]
+    fetchers = [
+        RssFetcher(name=s["name"], url=s["url"], max_items=max_items_per_source)
+        for s in sources
+    ]
 
     with ThreadPoolExecutor(max_workers=len(fetchers) or 1) as executor:
         future_to_name = {
@@ -81,8 +86,14 @@ def run_pipeline() -> None:
 
     # 2. Ingestion ------------------------------------------------------------
     logger.info("Step 1/3 – Fetching %d RSS feed(s)...", len(sources))
-    feed_items = fetch_all_feeds(sources)
+    feed_items = fetch_all_feeds(
+        sources, max_items_per_source=settings.rss_max_items_per_source
+    )
     logger.info("Total items fetched: %d", len(feed_items))
+    logger.info(
+        "Per-source RSS item cap: %d",
+        settings.rss_max_items_per_source,
+    )
 
     # 3. Processing -----------------------------------------------------------
     logger.info("Step 2/3 – Running LLM summariser...")
