@@ -1,16 +1,18 @@
 """Telegram delivery channel - concrete implementation of :class:`AbstractNotifier`.
 
 Sends the daily briefing as one or more Telegram messages using the Bot API.
-Long messages (> 4096 characters) are automatically split into chunks.
+Long messages (> 4096 characters) are automatically split into chunks while
+preserving the original text and line breaks.
 
-Telegram MarkdownV2 requires many punctuation characters to be escaped with a
-leading backslash.  The :func:`escape_markdown_v2` helper handles this so that
-messages render correctly without throwing API errors.
+When MarkdownV2 is enabled, the notifier rebuilds the outgoing message from
+the briefing's known structure instead of forwarding raw LLM markdown. That
+keeps formatting readable while still escaping Telegram's special characters.
 """
 
 from __future__ import annotations
 
 import logging
+import re
 
 import requests
 
@@ -18,46 +20,25 @@ from src.delivery.base import AbstractNotifier
 
 logger = logging.getLogger(__name__)
 
-# Telegram MarkdownV2 characters that must be escaped.
-MARKDOWN_V2_SPECIAL_CHARS: str = r"_*[]()~`>#+-=|{}.!"
-
 # Telegram message length limit (characters).
 MAX_MESSAGE_LENGTH: int = 4096
 
 TELEGRAM_API_TIMEOUT: int = 30  # seconds
 
-
-def escape_markdown_v2(text: str) -> str:
-    """Escape special characters for Telegram MarkdownV2 parse mode.
-
-    All characters listed in ``_MARKDOWN_V2_SPECIAL_CHARS`` are prefixed with
-    a backslash so Telegram's parser treats them as literal characters rather
-    than formatting markers.
-
-    Args:
-        text: Raw text that may contain Telegram MarkdownV2 special characters.
-
-    Returns:
-        Escaped text safe to send with ``parse_mode="MarkdownV2"``.
-    """
-    for char in MARKDOWN_V2_SPECIAL_CHARS:
-        text = text.replace(char, f"\\{char}")
-    return text
+_TITLE_RE = re.compile(r"^\*\*Title\*\*:\s*(.+)$")
+_TAGS_RE = re.compile(r"^\*\*Tags\*\*:\s*(.+)$")
+_TAKEAWAY_RE = re.compile(r"^\*\*One-line takeaway\*\*:\s*(.+)$")
+_LINK_RE = re.compile(r"^\*\*Original link\*\*:\s*(.+)$")
 
 
 def split_message(text: str, max_length: int = MAX_MESSAGE_LENGTH) -> list[str]:
-    """Split *text* into chunks that remain valid after MarkdownV2 escaping.
+    """Split *text* into chunks while preserving line breaks and wording.
 
-    We build chunks from the original (unescaped) text by joining lines until
-    escaping the tentative chunk would exceed *max_length*. If a single line
-    after escaping is still too long, we hard-split the escaped line while
-    ensuring no chunk ends with a dangling backslash (which would break
-    MarkdownV2 parsing).
+    The text is treated as plain text. Chunk boundaries are chosen so each
+    piece stays within Telegram's message limit without rewriting the content.
     """
-    # Fast-path: whole message fits after escaping
-    full_escaped = escape_markdown_v2(text)
-    if len(full_escaped) <= max_length:
-        return [full_escaped]
+    if len(text) <= max_length:
+        return [text]
 
     chunks: list[str] = []
     current_lines: list[str] = []
@@ -65,13 +46,12 @@ def split_message(text: str, max_length: int = MAX_MESSAGE_LENGTH) -> list[str]:
     def _flush_current() -> None:
         if not current_lines:
             return
-        escaped: str = escape_markdown_v2("".join(current_lines))
-        chunks.append(escaped)
+        chunks.append("".join(current_lines))
         current_lines.clear()
 
     for line in text.splitlines(keepends=True):
         tentative = "".join(current_lines) + line
-        if len(escape_markdown_v2(tentative)) <= max_length:
+        if len(tentative) <= max_length:
             current_lines.append(line)
             continue
 
@@ -80,24 +60,154 @@ def split_message(text: str, max_length: int = MAX_MESSAGE_LENGTH) -> list[str]:
             _flush_current()
 
         # Now handle the overflowing line itself.
-        escaped_line = escape_markdown_v2(line)
-        if len(escaped_line) <= max_length:
+        if len(line) <= max_length:
             current_lines.append(line)
             continue
 
-        # Hard-split the escaped line into safe pieces.
-        s: str = escaped_line
+        # Hard-split the oversized line into plain-text pieces.
+        s: str = line
         while len(s) > 0:
             part: str = s[:max_length]
-            # Avoid leaving a trailing single backslash at end of chunk.
-            if part.endswith("\\") and len(s) > len(part):
-                # extend by one char if possible to complete the escape.
-                part = s[: len(part) + 1]
             chunks.append(part)
             s = s[len(part) :]
 
     _flush_current()
     return chunks
+
+
+def _escape_markdown_v2(text: str) -> str:
+    """Escape MarkdownV2 control characters in *text*."""
+    escaped = text
+    for char in r"_*[]()~`>#+-=|{}.!":
+        escaped = escaped.replace(char, f"\\{char}")
+    return escaped
+
+
+def _render_markdown_v2_message(message: str) -> str:
+    """Render the pipeline briefing into Telegram MarkdownV2 safely.
+
+    The summariser emits a predictable block structure. We parse that structure
+    and re-emit it with Telegram-safe formatting so only the content is escaped
+    and the layout stays readable.
+    """
+    stripped = message.strip()
+    if not stripped:
+        return ""
+
+    if stripped == "No high-signal intelligence today.":
+        return _escape_markdown_v2(stripped)
+
+    lines = message.splitlines()
+    rendered_blocks: list[str] = []
+    current_block: dict[str, str] = {}
+    header_line = ""
+
+    def _flush_block() -> None:
+        if not current_block:
+            return
+        title = _escape_markdown_v2(current_block.get("title", ""))
+        tags = _escape_markdown_v2(current_block.get("tags", ""))
+        takeaway = _escape_markdown_v2(current_block.get("takeaway", ""))
+        link = _escape_markdown_v2(current_block.get("link", ""))
+
+        block_lines = [
+            f"*{title}*" if title else "",
+            f"• *Tags:* {tags}" if tags else "",
+            f"• *One-line takeaway:* {takeaway}" if takeaway else "",
+            f"• *Original link:* {link}" if link else "",
+        ]
+        rendered_blocks.append("\n".join(line for line in block_lines if line))
+        current_block.clear()
+
+    for raw_line in lines:
+        line = raw_line.strip()
+        if not line:
+            continue
+        if line == "---":
+            _flush_block()
+            continue
+
+        if not rendered_blocks and not current_block and not header_line:
+            header_line = _escape_markdown_v2(line)
+            continue
+
+        if match := _TITLE_RE.match(line):
+            current_block["title"] = match.group(1).strip()
+            continue
+        if match := _TAGS_RE.match(line):
+            current_block["tags"] = match.group(1).strip()
+            continue
+        if match := _TAKEAWAY_RE.match(line):
+            current_block["takeaway"] = match.group(1).strip()
+            continue
+        if match := _LINK_RE.match(line):
+            current_block["link"] = match.group(1).strip()
+            continue
+
+    _flush_block()
+
+    if not rendered_blocks:
+        return _escape_markdown_v2(message)
+
+    output_blocks: list[str] = []
+    if header_line:
+        output_blocks.append(f"*{header_line}*")
+
+    output_blocks.extend(rendered_blocks)
+    return "\n\n".join(block for block in output_blocks if block).strip()
+
+
+def _split_markdown_message(
+    text: str, max_length: int = MAX_MESSAGE_LENGTH
+) -> list[str]:
+    """Split a rendered MarkdownV2 message on block boundaries."""
+    if len(text) <= max_length:
+        return [text]
+
+    chunks: list[str] = []
+    current_lines: list[str] = []
+
+    def _flush_current() -> None:
+        if current_lines:
+            chunks.append("\n".join(current_lines).strip())
+            current_lines.clear()
+
+    for block in text.split("\n\n"):
+        tentative = "\n\n".join(current_lines + [block]) if current_lines else block
+        if len(tentative) <= max_length:
+            current_lines.append(block)
+            continue
+
+        if current_lines:
+            _flush_current()
+
+        if len(block) <= max_length:
+            current_lines.append(block)
+            continue
+
+        # Fallback: split a single oversized block by lines.
+        lines = block.splitlines()
+        chunk_lines: list[str] = []
+        for line in lines:
+            tentative_line = "\n".join(chunk_lines + [line]) if chunk_lines else line
+            if len(tentative_line) <= max_length:
+                chunk_lines.append(line)
+                continue
+            if chunk_lines:
+                chunks.append("\n".join(chunk_lines).strip())
+                chunk_lines.clear()
+            if len(line) <= max_length:
+                chunk_lines.append(line)
+                continue
+            start = 0
+            while start < len(line):
+                chunks.append(line[start : start + max_length])
+                start += max_length
+        if chunk_lines:
+            chunks.append("\n".join(chunk_lines).strip())
+
+    _flush_current()
+    return [chunk for chunk in chunks if chunk]
 
 
 class TelegramNotifier(AbstractNotifier):  # pylint: disable=too-few-public-methods
@@ -106,14 +216,14 @@ class TelegramNotifier(AbstractNotifier):  # pylint: disable=too-few-public-meth
     Args:
         bot_token: Telegram bot token obtained from @BotFather.
         chat_id:   Target chat or channel ID.
-        parse_mode: Telegram message parse mode.  Defaults to ``"MarkdownV2"``.
+        parse_mode: Telegram message parse mode.  Defaults to ``None``.
     """
 
     def __init__(
         self,
         bot_token: str,
         chat_id: str,
-        parse_mode: str = "MarkdownV2",
+        parse_mode: str | None = "MarkdownV2",
     ) -> None:
         self._bot_token = bot_token
         self._chat_id = chat_id
@@ -127,15 +237,23 @@ class TelegramNotifier(AbstractNotifier):  # pylint: disable=too-few-public-meth
     def send(self, message: str) -> None:
         """Deliver *message* to the configured Telegram chat.
 
-        The message is escaped for MarkdownV2 and split into chunks if it
-        exceeds Telegram's 4096-character limit.
+        MarkdownV2 is rendered from the briefing structure when enabled, and
+        the final message is split into chunks if it exceeds Telegram's
+        4096-character limit.
 
         Args:
             message: The formatted briefing text.
         """
-        # Split the original message into chunks that remain valid after
-        # escaping, then send each escaped chunk.
-        chunks = split_message(message)
+        rendered_message = (
+            _render_markdown_v2_message(message)
+            if self._parse_mode == "MarkdownV2"
+            else message
+        )
+        chunks = (
+            _split_markdown_message(rendered_message)
+            if self._parse_mode == "MarkdownV2"
+            else split_message(rendered_message)
+        )
 
         logger.info(
             "Sending %d message chunk(s) to Telegram chat %s.",
@@ -161,9 +279,10 @@ class TelegramNotifier(AbstractNotifier):  # pylint: disable=too-few-public-meth
         payload = {
             "chat_id": self._chat_id,
             "text": text,
-            "parse_mode": self._parse_mode,
             "disable_web_page_preview": True,
         }
+        if self._parse_mode:
+            payload["parse_mode"] = self._parse_mode
 
         for attempt in (1, 2):
             try:

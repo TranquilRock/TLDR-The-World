@@ -36,3 +36,32 @@ def test_send_retries_on_failure(monkeypatch) -> None:
     monkeypatch.setattr("src.delivery.telegram_notifier.requests.post", post)
     tn.send("hello")
     assert len(calls) >= 1
+
+
+def test_send_renders_markdownv2_from_briefing_structure(monkeypatch) -> None:
+    tn = TelegramNotifier(bot_token="token", chat_id="123")
+    payloads = []
+
+    def post(url, json, timeout):  # pylint: disable=unused-argument
+        payloads.append(json)
+        resp = Mock()
+        resp.raise_for_status.return_value = None
+        return resp
+
+    monkeypatch.setattr("src.delivery.telegram_notifier.requests.post", post)
+
+    message = (
+        "📰 Daily Intelligence Briefing — 2026-05-03\n\n"
+        "**Title**: AI agents _are_ here\n"
+        "**Tags**: #AIAgent\n"
+        "**One-line takeaway**: Summary with underscore_value\n"
+        "**Original link**: https://example.com/a_b\n"
+    )
+
+    tn.send(message)
+
+    assert payloads[0]["parse_mode"] == "MarkdownV2"
+    assert payloads[0]["text"].startswith("*📰 Daily Intelligence Briefing")
+    assert "*AI agents \\_are\\_ here*" in payloads[0]["text"]
+    assert "underscore\\_value" in payloads[0]["text"]
+    assert "https://example\\.com/a\\_b" in payloads[0]["text"]
