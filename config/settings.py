@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     github_models_token: str = Field(
         ...,
         description="Personal access token for GitHub Models API.",
+        validation_alias="GITHUB_MODELS_TOKEN",
     )
     github_models_base_url: str = Field(
         default="https://models.inference.ai.azure.com",
