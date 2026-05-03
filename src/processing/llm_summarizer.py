@@ -5,6 +5,7 @@ and produces a structured daily briefing in English.
 """
 
 from __future__ import annotations
+
 import json
 import logging
 from typing import Any
@@ -66,7 +67,9 @@ one compact JSON object with the following fields:
 - `tag`: one of `#AIAgent`, `#Geopolitics`, or `#Other` (choose the most relevant)
 - `link`: the original URL
 
-Return exactly one JSON object, e.g. {"title": ..., "one_line_summary": ..., "tag": ..., "link": ...} and nothing else.
+Return exactly one JSON object, e.g.:
+{"title": ..., "one_line_summary": ..., "tag": ..., "link": ...}
+and nothing else.
 """
 
 
@@ -106,12 +109,14 @@ class LlmSummarizer(AbstractProcessor):  # pylint: disable=too-few-public-method
             return "No high-signal intelligence today."
 
         logger.info(
-            "Processing %d item(s) with batched per-item summarisation using model '%s'.",
+            "Processing %d item(s) with batched per-item summarisation using "
+            "model '%s'.",
             len(items),
             self._settings.llm_model,
         )
 
-        # 1) First pass: produce compact per-item summaries by calling the model once per article.
+        # 1) First pass: produce compact per-item summaries by calling the
+        # model once per article.
         summaries: list[dict[str, Any]] = []
         for idx, item in enumerate(items):
             try:
@@ -133,7 +138,7 @@ class LlmSummarizer(AbstractProcessor):  # pylint: disable=too-few-public-method
             )
             return "No high-signal intelligence today."
 
-        # 2) Second pass: aggregate the compact summaries into final briefing
+        # 2) Second pass: aggregate the compact summaries into final briefing.
         logger.info(
             "Aggregating %d compact summaries into final briefing.", len(summaries)
         )
@@ -222,8 +227,8 @@ class LlmSummarizer(AbstractProcessor):  # pylint: disable=too-few-public-method
         }
 
         user_content = (
-            "Please produce a compact summary for the following single news item (see instructions):\n\n"
-            + json.dumps(payload, ensure_ascii=False)
+            "Please produce a compact summary for the following single news "
+            "item (see instructions):\n\n" + json.dumps(payload, ensure_ascii=False)
         )
 
         try:

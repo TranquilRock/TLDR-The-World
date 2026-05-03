@@ -42,7 +42,10 @@ def test_process_returns_content() -> None:
     s = LlmSummarizer(settings)
     mock_client = Mock()
     # First call: per-item summariser returns a JSON object as string
-    per_item_json = '{"title":"t","one_line_summary":"summary","tag":"#AIAgent","link":"l","source":"n"}'
+    per_item_json = (
+        '{"title":"t","one_line_summary":"summary","tag":"#AIAgent",'
+        '"link":"l","source":"n"}'
+    )
     per_item_resp = {"choices": [{"message": {"content": per_item_json}}]}
     # Second call: aggregation returns the final briefing text
     aggregation_resp = {"choices": [{"message": {"content": "Final briefing content"}}]}
@@ -62,7 +65,10 @@ def test_model_called_n_plus_one_times() -> None:
     s = LlmSummarizer(settings)
     mock_client = Mock()
     # per-item response JSON and aggregation response
-    per_item_json = '{"title":"t","one_line_summary":"summary","tag":"#AIAgent","link":"l","source":"n"}'
+    per_item_json = (
+        '{"title":"t","one_line_summary":"summary","tag":"#AIAgent",'
+        '"link":"l","source":"n"}'
+    )
     per_item_resp = {"choices": [{"message": {"content": per_item_json}}]}
     aggregation_resp = {"choices": [{"message": {"content": "Final briefing content"}}]}
 
