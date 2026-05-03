@@ -57,6 +57,18 @@ USER_PROMPT_TEMPLATE = """\
 {items_json}
 """
 
+# Prompt for per-item compact summarisation (returns JSON list)
+PER_ITEM_PROMPT = """\
+你是一個資訊整理員。對於使用者提供的單篇新聞條目（JSON 格式），請產生一個簡潔的 JSON 物件，包含欄位：
+
+- `title`: 標題
+- `one_line_summary`: 一句重點（繁體中文，最多 30 字）
+- `tag`: `#AIAgent` 或 `#Geopolitics` 或 `#Other`（只選最相關）
+- `link`: 原始連結
+
+回傳結果必須是單一個 JSON 物件，形如 {"title": ..., "one_line_summary": ..., "tag": ..., "link": ...}，不要包含其他文字或說明。
+"""
+
 
 class LlmSummarizer(AbstractProcessor):  # pylint: disable=too-few-public-methods
     """Filter and summarise feed items using GitHub Models (OpenAI SDK).
@@ -94,62 +106,176 @@ class LlmSummarizer(AbstractProcessor):  # pylint: disable=too-few-public-method
             return "今日無高信號情報。"
 
         logger.info(
-            "Sending %d item(s) to LLM model '%s'.",
+            "Processing %d item(s) with batched per-item summarisation using model '%s'.",
             len(items),
             self._settings.llm_model,
         )
 
-        items_payload = self._build_payload(items)
+        # 1) First pass: produce compact per-item summaries by calling the model once per article.
+        summaries: list[dict[str, Any]] = []
+        for idx, item in enumerate(items):
+            try:
+                summary = self._summarise_item(item)
+            except Exception as exc:  # pylint: disable=broad-except
+                logger.error(
+                    "Per-item summarisation failed for item %d (%s): %s",
+                    idx,
+                    item.get("title", "<no title>"),
+                    exc,
+                )
+                continue
+            if summary:
+                summaries.append(summary)
+
+        if not summaries:
+            logger.warning(
+                "No per-item summaries produced; skipping final aggregation."
+            )
+            return "今日無高信號情報。"
+
+        # 2) Second pass: aggregate the compact summaries into final briefing
+        logger.info(
+            "Aggregating %d compact summaries into final briefing.", len(summaries)
+        )
+        items_payload = [
+            {
+                "source": s.get("source", ""),
+                "title": s.get("title", ""),
+                "summary": s.get("one_line_summary", ""),
+                "link": s.get("link", ""),
+                "tag": s.get("tag", "#Other"),
+            }
+            for s in summaries
+        ]
+
         user_content = USER_PROMPT_TEMPLATE.format(
             items_json=json.dumps(items_payload, ensure_ascii=False, indent=2)
         )
 
         try:
-            response = self._client.chat.completions.create(
-                model=self._settings.llm_model,
+            response = self._call_model(
                 messages=[
                     {"role": "system", "content": SYSTEM_PROMPT},
                     {"role": "user", "content": user_content},
                 ],
-                temperature=0.3,
-                max_tokens=4096,
+                max_tokens=2048,
             )
         except Exception as exc:
-            logger.error("LLM API call failed: %s", exc)
+            logger.error("LLM API call failed during aggregation: %s", exc)
             raise RuntimeError(f"LLM API call failed: {exc}") from exc
 
-        # Robustly extract text content from different SDK/response shapes.
-        def _extract_content(resp: Any) -> str:
-            # dict-like response (e.g., when using a requests wrapper)
-            if isinstance(resp, dict):
-                choices_var = resp.get("choices") or []
-                if not isinstance(choices_var, list) or not choices_var:
-                    return ""
-                first = choices_var[0]
-                if isinstance(first, dict):
-                    msg = first.get("message") or {}
-                    return msg.get("content") or first.get("text") or ""
-                return ""
+        if not response:
+            logger.error("LLM aggregation returned empty result")
+            raise RuntimeError("LLM aggregation returned no content")
 
-            # object-like response from SDK
-            choices = getattr(resp, "choices", None)
+        logger.info("LLM aggregation complete. Output length: %d chars.", len(response))
+        return response
+
+    def _call_model(
+        self, messages: list[dict[str, str]], max_tokens: int = 2048
+    ) -> str:
+        """Call the model and return the response string, handling SDK shapes."""
+        try:
+            resp = self._client.chat.completions.create(
+                model=self._settings.llm_model,
+                messages=messages,
+                temperature=0.3,
+                max_tokens=max_tokens,
+            )
+        except Exception as exc:
+            logger.error("Model request failed: %s", exc)
+            raise
+
+        # Extract content similar to previous logic
+        if isinstance(resp, dict):
+            choices = resp.get("choices") or []
             if not choices:
                 return ""
             first = choices[0]
-            message = getattr(first, "message", None)
-            if message is not None:
-                return getattr(message, "content", "") or ""
-            return getattr(first, "text", "") or ""
+            if isinstance(first, dict):
+                msg = first.get("message") or {}
+                return msg.get("content") or first.get("text") or ""
+            return ""
 
-        result: str = _extract_content(response)
-        if not result:
-            logger.error(
-                "LLM API returned empty content or unexpected shape: %r", response
+        # object-like response
+        choices = getattr(resp, "choices", None)
+        if not choices:
+            return ""
+        first = choices[0]
+        message = getattr(first, "message", None)
+        if message is not None:
+            return getattr(message, "content", "") or ""
+        return getattr(first, "text", "") or ""
+
+    def _summarise_item(self, item: FeedItem) -> dict[str, Any] | None:
+        """Produce a compact summary for a single FeedItem.
+
+        Returns a dict with keys: title, one_line_summary, tag, link, source
+        or None if summarisation / parsing failed.
+        """
+        payload = {
+            "source": item["source_name"],
+            "title": item["title"],
+            "summary": item["summary"][:300] if item["summary"] else "",
+            "link": item["link"],
+            "published": item["published_date"],
+        }
+
+        user_content = (
+            "請根據以下單一新聞條目產生簡潔摘要（見說明）：\n\n"
+            + json.dumps(payload, ensure_ascii=False)
+        )
+
+        try:
+            resp_text = self._call_model(
+                messages=[
+                    {"role": "system", "content": PER_ITEM_PROMPT},
+                    {"role": "user", "content": user_content},
+                ],
+                max_tokens=256,
             )
-            raise RuntimeError("LLM API returned no content")
+        except Exception as exc:  # pylint: disable=broad-except
+            logger.warning(
+                "Model call failed for item '%s': %s",
+                item.get("title", "<no title>"),
+                exc,
+            )
+            return None
 
-        logger.info("LLM processing complete. Output length: %d chars.", len(result))
-        return result
+        # Parse JSON from the model output defensively
+        try:
+            parsed = json.loads(resp_text)
+            if isinstance(parsed, dict):
+                return {
+                    "source": parsed.get("source", payload["source"]),
+                    "title": parsed.get("title", payload["title"]),
+                    "one_line_summary": parsed.get("one_line_summary", ""),
+                    "tag": parsed.get("tag", "#Other"),
+                    "link": parsed.get("link", payload["link"]),
+                }
+        except Exception:  # pylint: disable=broad-except
+            # Try to salvage JSON-like substring if model wrapped output
+            try:
+                start = resp_text.find("{")
+                end = resp_text.rfind("}")
+                if start != -1 and end != -1 and end > start:
+                    parsed = json.loads(resp_text[start : end + 1])
+                    if isinstance(parsed, dict):
+                        return {
+                            "source": parsed.get("source", payload["source"]),
+                            "title": parsed.get("title", payload["title"]),
+                            "one_line_summary": parsed.get("one_line_summary", ""),
+                            "tag": parsed.get("tag", "#Other"),
+                            "link": parsed.get("link", payload["link"]),
+                        }
+            except Exception:  # pylint: disable=broad-except
+                logger.warning(
+                    "Failed to parse JSON for item '%s'. Response: %s",
+                    payload["title"],
+                    resp_text,
+                )
+
+        return None
 
     # ------------------------------------------------------------------
     # Private helpers
