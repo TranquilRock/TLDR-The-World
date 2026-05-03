@@ -12,7 +12,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
-from pydantic import Field, field_validator
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
@@ -32,11 +32,12 @@ class Settings(BaseSettings):
     github_models_token: str = Field(
         ...,
         description="Personal access token for GitHub Models API.",
-        validation_alias="GITHUB_MODELS_TOKEN",
+        validation_alias=AliasChoices("GITHUB_MODELS_TOKEN", "MODELS_API_TOKEN"),
     )
     github_models_base_url: str = Field(
         default="https://models.inference.ai.azure.com",
         description="Base URL for GitHub Models (OpenAI-compatible) endpoint.",
+        validation_alias=AliasChoices("GITHUB_MODELS_BASE_URL", "MODELS_BASE_URL"),
     )
     llm_model: str = Field(
         default="gpt-4o-mini",

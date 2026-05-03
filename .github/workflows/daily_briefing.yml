@@ -29,6 +29,9 @@ jobs:
       - name: Run AI Information Pipeline
         env:
           GITHUB_MODELS_TOKEN: ${{ secrets.MODELS_API_TOKEN }}
+          GITHUB_MODELS_BASE_URL: ${{ vars.MODELS_BASE_URL || 'https://models.inference.ai.azure.com' }}
+          LLM_MODEL: ${{ vars.LLM_MODEL || 'gpt-4o-mini' }}
+          RSS_MAX_ITEMS_PER_SOURCE: ${{ vars.RSS_MAX_ITEMS_PER_SOURCE || '8' }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python -m src.main
