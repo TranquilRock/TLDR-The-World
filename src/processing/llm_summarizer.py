@@ -1,6 +1,6 @@
-"""LLM-based summariser using GitHub Models (OpenAI-compatible API).
+"""LLM-based summarizer using GitHub Models (OpenAI-compatible API).
 
-The summariser sends all collected feed items to an LLM and asks it to
+The summarizer sends all collected feed items to an LLM and asks it to
 filter for relevance and produce a structured daily briefing in Traditional
 Chinese (繁體中文).
 """
