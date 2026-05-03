@@ -109,12 +109,15 @@ def _render_markdown_v2_message(message: str) -> str:
         tags = _escape_markdown_v2(current_block.get("tags", ""))
         takeaway = _escape_markdown_v2(current_block.get("takeaway", ""))
         link = _escape_markdown_v2(current_block.get("link", ""))
+        tags_label = _escape_markdown_v2("Tags")
+        takeaway_label = _escape_markdown_v2("One-line takeaway")
+        link_label = _escape_markdown_v2("Original link")
 
         block_lines = [
             f"*{title}*" if title else "",
-            f"• *Tags:* {tags}" if tags else "",
-            f"• *One-line takeaway:* {takeaway}" if takeaway else "",
-            f"• *Original link:* {link}" if link else "",
+            f"• *{tags_label}:* {tags}" if tags else "",
+            f"• *{takeaway_label}:* {takeaway}" if takeaway else "",
+            f"• *{link_label}:* {link}" if link else "",
         ]
         rendered_blocks.append("\n".join(line for line in block_lines if line))
         current_block.clear()
