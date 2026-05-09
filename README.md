@@ -9,6 +9,7 @@ The pipeline is designed to stay lightweight and readable:
 
 - RSS feeds are fetched concurrently and capped per source before LLM processing.
 - Feed items are summarised in two passes to avoid token limit issues.
+- Final briefings include both source attribution and original-link citations.
 - Telegram delivery uses structured MarkdownV2 rendering so the final message
  stays readable without breaking entity parsing.
 

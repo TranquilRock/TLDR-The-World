@@ -39,6 +39,7 @@ Your task:
 
 ---
 **Title**: <A concise, catchy title in English>
+**Source**: <Original publisher/source name from input>
 **Tags**: `#AIAgent` `#Geopolitics` (pick the most relevant tags)
 **One-line takeaway**: <One-sentence takeaway in English>
 **Original link**: <original URL>
@@ -63,12 +64,13 @@ You are an information curator. Given a single news item (as JSON), produce
 one compact JSON object with the following fields:
 
 - `title`: the headline
+- `source`: original source/publisher name from input
 - `one_line_summary`: a one-sentence takeaway in English (max 30 words)
 - `tag`: one of `#AIAgent`, `#Geopolitics`, or `#Other` (choose the most relevant)
 - `link`: the original URL
 
 Return exactly one JSON object, e.g.:
-{"title": ..., "one_line_summary": ..., "tag": ..., "link": ...}
+{"title": ..., "source": ..., "one_line_summary": ..., "tag": ..., "link": ...}
 and nothing else.
 """
 

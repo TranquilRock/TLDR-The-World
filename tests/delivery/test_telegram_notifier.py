@@ -53,6 +53,7 @@ def test_send_renders_markdownv2_from_briefing_structure(monkeypatch) -> None:
     message = (
         "📰 Daily Intelligence Briefing — 2026-05-03\n\n"
         "**Title**: AI agents _are_ here\n"
+        "**Source**: Example_News\n"
         "**Tags**: #AIAgent\n"
         "**One-line takeaway**: Summary with underscore_value\n"
         "**Original link**: https://example.com/a_b\n"
@@ -63,5 +64,6 @@ def test_send_renders_markdownv2_from_briefing_structure(monkeypatch) -> None:
     assert payloads[0]["parse_mode"] == "MarkdownV2"
     assert payloads[0]["text"].startswith("*📰 Daily Intelligence Briefing")
     assert "*AI agents \\_are\\_ here*" in payloads[0]["text"]
+    assert "• *Source:* Example\\_News" in payloads[0]["text"]
     assert "underscore\\_value" in payloads[0]["text"]
     assert "https://example\\.com/a\\_b" in payloads[0]["text"]
