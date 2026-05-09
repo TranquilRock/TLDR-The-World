@@ -31,6 +31,42 @@
     {
       "name": "OpenAI Blog",
       "url": "https://openai.com/blog/rss.xml"
+    },
+    {
+      "name": "Google Research Blog",
+      "url": "https://research.google/blog/rss/"
+    },
+    {
+      "name": "Hugging Face Blog",
+      "url": "https://huggingface.co/blog/feed.xml"
+    },
+    {
+      "name": "VentureBeat AI",
+      "url": "https://venturebeat.com/category/ai/feed/"
+    },
+    {
+      "name": "Wired AI",
+      "url": "https://www.wired.com/feed/tag/ai/latest/rss"
+    },
+    {
+      "name": "NPR World",
+      "url": "https://feeds.npr.org/1004/rss.xml"
+    },
+    {
+      "name": "The Guardian World News",
+      "url": "https://www.theguardian.com/world/rss"
+    },
+    {
+      "name": "Al Jazeera",
+      "url": "https://www.aljazeera.com/xml/rss/all.xml"
+    },
+    {
+      "name": "CNN World",
+      "url": "http://rss.cnn.com/rss/edition_world.rss"
+    },
+    {
+      "name": "The New York Times World",
+      "url": "https://rss.nytimes.com/services/xml/rss/nyt/World.xml"
     }
   ]
 }
