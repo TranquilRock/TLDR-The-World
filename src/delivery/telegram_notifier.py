@@ -26,9 +26,26 @@ MAX_MESSAGE_LENGTH: int = 4096
 TELEGRAM_API_TIMEOUT: int = 30  # seconds
 
 _TITLE_RE = re.compile(r"^\*\*Title\*\*:\s*(.+)$")
+_SOURCE_RE = re.compile(r"^\*\*Source\*\*:\s*(.+)$")
 _TAGS_RE = re.compile(r"^\*\*Tags\*\*:\s*(.+)$")
 _TAKEAWAY_RE = re.compile(r"^\*\*One-line takeaway\*\*:\s*(.+)$")
 _LINK_RE = re.compile(r"^\*\*Original link\*\*:\s*(.+)$")
+_FIELD_PATTERNS = (
+    ("title", _TITLE_RE),
+    ("source", _SOURCE_RE),
+    ("tags", _TAGS_RE),
+    ("takeaway", _TAKEAWAY_RE),
+    ("link", _LINK_RE),
+)
+
+
+def _capture_block_field(line: str, current_block: dict[str, str]) -> bool:
+    """Capture a known structured briefing field from a single line."""
+    for key, pattern in _FIELD_PATTERNS:
+        if match := pattern.match(line):
+            current_block[key] = match.group(1).strip()
+            return True
+    return False
 
 
 def split_message(text: str, max_length: int = MAX_MESSAGE_LENGTH) -> list[str]:
@@ -106,15 +123,18 @@ def _render_markdown_v2_message(message: str) -> str:
         if not current_block:
             return
         title = _escape_markdown_v2(current_block.get("title", ""))
+        source = _escape_markdown_v2(current_block.get("source", ""))
         tags = _escape_markdown_v2(current_block.get("tags", ""))
         takeaway = _escape_markdown_v2(current_block.get("takeaway", ""))
         link = _escape_markdown_v2(current_block.get("link", ""))
+        source_label = _escape_markdown_v2("Source")
         tags_label = _escape_markdown_v2("Tags")
         takeaway_label = _escape_markdown_v2("One-line takeaway")
         link_label = _escape_markdown_v2("Original link")
 
         block_lines = [
             f"*{title}*" if title else "",
+            f"• *{source_label}:* {source}" if source else "",
             f"• *{tags_label}:* {tags}" if tags else "",
             f"• *{takeaway_label}:* {takeaway}" if takeaway else "",
             f"• *{link_label}:* {link}" if link else "",
@@ -134,17 +154,7 @@ def _render_markdown_v2_message(message: str) -> str:
             header_line = _escape_markdown_v2(line)
             continue
 
-        if match := _TITLE_RE.match(line):
-            current_block["title"] = match.group(1).strip()
-            continue
-        if match := _TAGS_RE.match(line):
-            current_block["tags"] = match.group(1).strip()
-            continue
-        if match := _TAKEAWAY_RE.match(line):
-            current_block["takeaway"] = match.group(1).strip()
-            continue
-        if match := _LINK_RE.match(line):
-            current_block["link"] = match.group(1).strip()
+        if _capture_block_field(line, current_block):
             continue
 
     _flush_block()
