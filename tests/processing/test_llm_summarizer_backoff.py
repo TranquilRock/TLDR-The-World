@@ -1,6 +1,5 @@
 from types import SimpleNamespace
 
-from config.settings import Settings
 from src.processing.llm_summarizer import LlmSummarizer
 
 

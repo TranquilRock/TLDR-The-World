@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import json
 import logging
-import time
 import random
+import time
 from typing import Any
 
 from openai import OpenAI
