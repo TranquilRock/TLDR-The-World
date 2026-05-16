@@ -31,7 +31,19 @@ Optional repository variables:
 - `LLM_MODEL` with default `gpt-4o-mini`
 - `MODELS_MIN_INTERVAL_SECONDS` with default `4.5`
 - `RSS_MAX_ITEMS_PER_SOURCE` with default `8`
-- `RSS_MAX_AGE_HOURS` with default `48` (discard feed items older than this)
+ - `RSS_MAX_AGE_HOURS` with default `48` (discard feed items older than this)
+
+Rate-limit & retry settings (optional):
+
+- `GITHUB_MODELS_RETRY_MAX_ATTEMPTS` — default `3`
+- `GITHUB_MODELS_RETRY_BACKOFF_BASE_SECONDS` — default `0.5`
+- `GITHUB_MODELS_RETRY_BACKOFF_MAX_SECONDS` — default `8.0`
+
+These correspond to the `github_models_retry_*` settings in the application
+configuration and control the capped exponential backoff when the Models API
+returns rate-limit responses (HTTP 429). In CI/Action runners you can reduce
+the base backoff for faster retries or increase attempts if you observe
+transient 429s.
 
 For local development, place the same values in your shell environment or a
 `.env` file.
