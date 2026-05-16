@@ -57,6 +57,12 @@ class Settings(BaseSettings):
         ge=1,
         description="Maximum RSS items to keep per source before LLM processing.",
     )
+    rss_max_age_hours: float = Field(
+        default=48.0,
+        ge=0.0,
+        description="Discard RSS items older than this many hours. Set to 0 to disable age filtering.",
+        validation_alias=AliasChoices("RSS_MAX_AGE_HOURS"),
+    )
 
     # --- Telegram ---
     telegram_bot_token: str = Field(

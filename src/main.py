@@ -31,7 +31,9 @@ logger = logging.getLogger(__name__)
 
 
 def fetch_all_feeds(
-    sources: list[dict], max_items_per_source: int = 8
+    sources: list[dict],
+    max_items_per_source: int = 8,
+    max_age_hours: float = 48.0,
 ) -> list[FeedItem]:
     """Fetch all configured RSS feeds in parallel.
 
@@ -41,13 +43,20 @@ def fetch_all_feeds(
 
     Args:
         sources: List of feed dicts with ``name`` and ``url`` keys.
+        max_items_per_source: Maximum items per source.
+        max_age_hours: Discard items older than this many hours.
 
     Returns:
         Combined list of :class:`FeedItem` objects from all sources.
     """
     all_items: list[FeedItem] = []
     fetchers = [
-        RssFetcher(name=s["name"], url=s["url"], max_items=max_items_per_source)
+        RssFetcher(
+            name=s["name"],
+            url=s["url"],
+            max_items=max_items_per_source,
+            max_age_hours=max_age_hours,
+        )
         for s in sources
     ]
 
@@ -87,12 +96,15 @@ def run_pipeline() -> None:
     # 2. Ingestion ------------------------------------------------------------
     logger.info("Step 1/3 – Fetching %d RSS feed(s)...", len(sources))
     feed_items = fetch_all_feeds(
-        sources, max_items_per_source=settings.rss_max_items_per_source
+        sources,
+        max_items_per_source=settings.rss_max_items_per_source,
+        max_age_hours=settings.rss_max_age_hours,
     )
     logger.info("Total items fetched: %d", len(feed_items))
     logger.info(
-        "Per-source RSS item cap: %d",
+        "Per-source RSS item cap: %d; max age: %.1f hours",
         settings.rss_max_items_per_source,
+        settings.rss_max_age_hours,
     )
 
     # 3. Processing -----------------------------------------------------------
