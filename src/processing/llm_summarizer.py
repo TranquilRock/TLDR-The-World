@@ -213,21 +213,8 @@ class LlmSummarizer(AbstractProcessor):  # pylint: disable=too-few-public-method
                 Exception
             ) as exc:  # pragma: no cover - branching tested in unit tests
                 # Detect 429 / rate-limit indicators if available on the exception
-                status_code = getattr(exc, "status_code", None) or getattr(
-                    exc, "http_status", None
-                )
-                msg = str(exc)
-                is_rate_limit = False
-                if status_code == 429:
-                    is_rate_limit = True
-                elif "429" in msg or "RateLimit" in msg or "rate limit" in msg.lower():
-                    is_rate_limit = True
-
-                if is_rate_limit and attempt < max_attempts:
-                    # exponential backoff with small jitter
-                    backoff = min(max_backoff, base_backoff * (2 ** (attempt - 1)))
-                    jitter = random.uniform(0, backoff * 0.1)
-                    sleep_for = backoff + jitter
+                if self._is_rate_limit_exception(exc) and attempt < max_attempts:
+                    sleep_for = self._backoff_delay(attempt, base_backoff, max_backoff)
                     logger.warning(
                         "Model request rate-limited (attempt %d/%d). Backing off %.2fs",
                         attempt,
@@ -348,6 +335,26 @@ class LlmSummarizer(AbstractProcessor):  # pylint: disable=too-few-public-method
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
+
+    def _is_rate_limit_exception(self, exc: Exception) -> bool:
+        """Return True if *exc* appears to be a rate-limit (429) error."""
+        status_code = getattr(exc, "status_code", None) or getattr(
+            exc, "http_status", None
+        )
+        if status_code == 429:
+            return True
+        msg = str(exc).lower()
+        if "429" in msg or "ratelimit" in msg or "rate limit" in msg:
+            return True
+        return False
+
+    def _backoff_delay(
+        self, attempt: int, base_backoff: float, max_backoff: float
+    ) -> float:
+        """Compute capped exponential backoff with a small jitter."""
+        backoff = min(max_backoff, base_backoff * (2 ** (attempt - 1)))
+        jitter = random.uniform(0, backoff * 0.1)
+        return backoff + jitter
 
     @staticmethod
     def _build_payload(items: list[FeedItem]) -> list[dict[str, Any]]:

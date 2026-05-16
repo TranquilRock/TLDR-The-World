@@ -1,4 +1,6 @@
 from types import SimpleNamespace
+
+# pylint: disable=duplicate-code
 from typing import cast
 from unittest.mock import Mock
 

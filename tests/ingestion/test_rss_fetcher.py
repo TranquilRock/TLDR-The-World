@@ -1,5 +1,7 @@
 """Tests for RSS feed fetcher, including age-based filtering."""
 
+# pylint: disable=duplicate-code
+
 from datetime import datetime, timedelta, timezone
 from unittest.mock import Mock, patch
 

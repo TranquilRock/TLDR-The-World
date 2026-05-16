@@ -1,5 +1,7 @@
 """End-to-end tests for the main pipeline orchestration."""
 
+# pylint: disable=duplicate-code
+
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from typing import cast
