@@ -43,6 +43,15 @@ class Settings(BaseSettings):
         default="gpt-4o-mini",
         description="Model identifier to use for summarisation.",
     )
+    github_models_min_interval_seconds: float = Field(
+        default=4.5,
+        ge=0.0,
+        description="Minimum spacing between GitHub Models API calls.",
+        validation_alias=AliasChoices(
+            "GITHUB_MODELS_MIN_INTERVAL_SECONDS",
+            "MODELS_MIN_INTERVAL_SECONDS",
+        ),
+    )
     rss_max_items_per_source: int = Field(
         default=8,
         ge=1,

@@ -29,6 +29,7 @@ Optional repository variables:
 
 - `MODELS_BASE_URL` with default `https://models.inference.ai.azure.com`
 - `LLM_MODEL` with default `gpt-4o-mini`
+- `MODELS_MIN_INTERVAL_SECONDS` with default `4.5`
 - `RSS_MAX_ITEMS_PER_SOURCE` with default `8`
 
 For local development, place the same values in your shell environment or a
