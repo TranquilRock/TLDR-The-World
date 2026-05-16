@@ -80,12 +80,12 @@ Post-merge checklist
 ---------------------
 
 - After merging a PR, verify the CI run for the branch completed successfully and
-	that `coverage.xml` was produced (artifact `coverage-xml` is uploaded).
+ that `coverage.xml` was produced (artifact `coverage-xml` is uploaded).
 - Visit the Codecov project page (the badge links there) to confirm the report
-	for the branch/HEAD is visible.
+ for the branch/HEAD is visible.
 - For private repositories: if Codecov uploads fail, add `CODECOV_TOKEN` to
-	repository Secrets (Settings → Secrets) and re-run the workflow. Only enable
-	the token for trusted workflows and avoid exposing it in logs.
+ repository Secrets (Settings → Secrets) and re-run the workflow. Only enable
+ the token for trusted workflows and avoid exposing it in logs.
 
 ## Pylint
 
