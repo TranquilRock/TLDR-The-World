@@ -57,6 +57,37 @@ class Settings(BaseSettings):
         ge=1,
         description="Maximum RSS items to keep per source before LLM processing.",
     )
+    rss_max_age_hours: float = Field(
+        default=48.0,
+        ge=0.0,
+        description=(
+            "Discard RSS items older than this many hours. "
+            "Set to 0 to disable age filtering."
+        ),
+        validation_alias=AliasChoices("RSS_MAX_AGE_HOURS"),
+    )
+
+    # Retry settings for GitHub Models API (used for 429 exponential backoff)
+    github_models_retry_max_attempts: int = Field(
+        default=3,
+        ge=0,
+        description=(
+            "Maximum number of retry attempts for transient model errors "
+            "(e.g., 429)."
+        ),
+    )
+    github_models_retry_backoff_base_seconds: float = Field(
+        default=0.5,
+        ge=0.0,
+        description=(
+            "Base backoff (in seconds) for exponential retry on 429 responses."
+        ),
+    )
+    github_models_retry_backoff_max_seconds: float = Field(
+        default=8.0,
+        ge=0.0,
+        description=("Maximum backoff cap (in seconds) for exponential retry."),
+    )
 
     # --- Telegram ---
     telegram_bot_token: str = Field(

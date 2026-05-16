@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import random
 import time
 from typing import Any
 
@@ -188,17 +189,42 @@ class LlmSummarizer(AbstractProcessor):  # pylint: disable=too-few-public-method
         self, messages: list[dict[str, str]], max_tokens: int = 2048
     ) -> str:
         """Call the model and return the response string, handling SDK shapes."""
-        self._wait_for_next_model_call_slot()
-        try:
-            resp = self._client.chat.completions.create(
-                model=self._settings.llm_model,
-                messages=messages,
-                temperature=0.3,
-                max_tokens=max_tokens,
-            )
-        except Exception as exc:
-            logger.error("Model request failed: %s", exc)
-            raise
+        max_attempts = getattr(self._settings, "github_models_retry_max_attempts", 1)
+        base_backoff = getattr(
+            self._settings, "github_models_retry_backoff_base_seconds", 0.5
+        )
+        max_backoff = getattr(
+            self._settings, "github_models_retry_backoff_max_seconds", 8.0
+        )
+
+        attempt = 0
+        while True:
+            attempt += 1
+            self._wait_for_next_model_call_slot()
+            try:
+                resp = self._client.chat.completions.create(
+                    model=self._settings.llm_model,
+                    messages=messages,
+                    temperature=0.3,
+                    max_tokens=max_tokens,
+                )
+                break
+            except (
+                Exception
+            ) as exc:  # pragma: no cover - branching tested in unit tests
+                # Detect 429 / rate-limit indicators if available on the exception
+                if self._is_rate_limit_exception(exc) and attempt < max_attempts:
+                    sleep_for = self._backoff_delay(attempt, base_backoff, max_backoff)
+                    logger.warning(
+                        "Model request rate-limited (attempt %d/%d). Backing off %.2fs",
+                        attempt,
+                        max_attempts,
+                        sleep_for,
+                    )
+                    time.sleep(sleep_for)
+                    continue
+                logger.error("Model request failed: %s", exc)
+                raise
 
         # Extract content similar to previous logic
         if isinstance(resp, dict):
@@ -309,6 +335,26 @@ class LlmSummarizer(AbstractProcessor):  # pylint: disable=too-few-public-method
     # ------------------------------------------------------------------
     # Private helpers
     # ------------------------------------------------------------------
+
+    def _is_rate_limit_exception(self, exc: Exception) -> bool:
+        """Return True if *exc* appears to be a rate-limit (429) error."""
+        status_code = getattr(exc, "status_code", None) or getattr(
+            exc, "http_status", None
+        )
+        if status_code == 429:
+            return True
+        msg = str(exc).lower()
+        if "429" in msg or "ratelimit" in msg or "rate limit" in msg:
+            return True
+        return False
+
+    def _backoff_delay(
+        self, attempt: int, base_backoff: float, max_backoff: float
+    ) -> float:
+        """Compute capped exponential backoff with a small jitter."""
+        backoff = min(max_backoff, base_backoff * (2 ** (attempt - 1)))
+        jitter = random.uniform(0, backoff * 0.1)
+        return backoff + jitter
 
     @staticmethod
     def _build_payload(items: list[FeedItem]) -> list[dict[str, Any]]:

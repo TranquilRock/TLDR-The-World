@@ -1,0 +1,16 @@
+# Codecov configuration - simple defaults for project-level status and ignores
+coverage:
+  status:
+    project:
+      default:
+        target: 85%
+    patch:
+      default:
+        target: 80%
+
+ignore:
+  - tests/*
+  - docs/*
+
+comment:
+  layout: "header, diff, files"

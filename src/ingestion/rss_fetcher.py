@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import logging
+import time
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import feedparser
@@ -27,10 +29,13 @@ class RssFetcher(AbstractSource):  # pylint: disable=too-few-public-methods
                8 to keep LLM prompt sizes manageable.
     """
 
-    def __init__(self, name: str, url: str, max_items: int = 8) -> None:
+    def __init__(
+        self, name: str, url: str, max_items: int = 8, max_age_hours: float = 48.0
+    ) -> None:
         self.name = name
         self.url = url
         self.max_items = max_items
+        self.max_age_hours = max(0.0, max_age_hours)
 
     # ------------------------------------------------------------------
     # Public interface
@@ -79,15 +84,51 @@ class RssFetcher(AbstractSource):  # pylint: disable=too-few-public-methods
         return response.content
 
     def _parse_feed(self, raw_content: bytes) -> list[FeedItem]:
-        """Parse *raw_content* with feedparser and normalise into FeedItems."""
+        """Parse *raw_content* with feedparser and normalise into FeedItems.
+
+        Items older than *max_age_hours* are discarded.
+        """
         parsed = feedparser.parse(raw_content)
 
         items: list[FeedItem] = []
         for entry in parsed.entries[: self.max_items]:
+            # Skip items that are too old.
+            if self.max_age_hours > 0 and self._is_entry_too_old(entry):
+                logger.debug(
+                    "Feed '%s': skipping entry older than %d hours: %s",
+                    self.name,
+                    self.max_age_hours,
+                    getattr(entry, "title", "<no title>"),
+                )
+                continue
             items.append(self._normalise_entry(entry))
 
         logger.info("Feed '%s': fetched %d item(s).", self.name, len(items))
         return items
+
+    def _is_entry_too_old(self, entry: Any) -> bool:
+        """Check if *entry* is older than *max_age_hours*."""
+        if self.max_age_hours <= 0:
+            return False
+
+        # Try to extract parsed time from feedparser's result.
+        struct_time = getattr(entry, "published_parsed", None) or getattr(
+            entry, "updated_parsed", None
+        )
+
+        if struct_time is None:
+            # No time info; assume it's recent.
+            return False
+
+        try:
+            entry_dt = datetime.fromtimestamp(time.mktime(struct_time), tz=timezone.utc)
+            now = datetime.now(tz=timezone.utc)
+            age = now - entry_dt
+            max_age = timedelta(hours=self.max_age_hours)
+            return age > max_age
+        except (ValueError, OSError, OverflowError):
+            # If we can't parse, assume it's recent.
+            return False
 
     def _normalise_entry(self, entry: Any) -> FeedItem:
         """Convert a feedparser entry object into a :class:`FeedItem`."""
