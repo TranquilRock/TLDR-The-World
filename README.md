@@ -31,7 +31,7 @@ Optional repository variables:
 - `LLM_MODEL` with default `gpt-4o-mini`
 - `MODELS_MIN_INTERVAL_SECONDS` with default `4.5`
 - `RSS_MAX_ITEMS_PER_SOURCE` with default `8`
- - `RSS_MAX_AGE_HOURS` with default `48` (discard feed items older than this)
+- `RSS_MAX_AGE_HOURS` with default `48` (discard feed items older than this)
 
 Rate-limit & retry settings (optional):
 

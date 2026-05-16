@@ -27,7 +27,9 @@ def test_call_model_retries_on_429(monkeypatch) -> None:
             raise e
         return {"choices": [{"message": {"content": "Recovered"}}]}
 
-    mock_client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+    mock_client = SimpleNamespace(
+        chat=SimpleNamespace(completions=SimpleNamespace(create=create))
+    )
     s._client = mock_client  # type: ignore[attr-defined]
 
     slept = []
@@ -37,7 +39,9 @@ def test_call_model_retries_on_429(monkeypatch) -> None:
 
     monkeypatch.setattr("src.processing.llm_summarizer.time.sleep", fake_sleep)
     # make jitter deterministic
-    monkeypatch.setattr("src.processing.llm_summarizer.random.uniform", lambda a, b: 0.0)
+    monkeypatch.setattr(
+        "src.processing.llm_summarizer.random.uniform", lambda a, b: 0.0
+    )
 
     resp = s._call_model(messages=[{"role": "user", "content": "hi"}], max_tokens=10)
 

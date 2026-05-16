@@ -209,7 +209,9 @@ class LlmSummarizer(AbstractProcessor):  # pylint: disable=too-few-public-method
                     max_tokens=max_tokens,
                 )
                 break
-            except Exception as exc:  # pragma: no cover - branching tested in unit tests
+            except (
+                Exception
+            ) as exc:  # pragma: no cover - branching tested in unit tests
                 # Detect 429 / rate-limit indicators if available on the exception
                 status_code = getattr(exc, "status_code", None) or getattr(
                     exc, "http_status", None
