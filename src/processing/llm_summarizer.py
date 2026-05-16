@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from typing import Any
 
 from openai import OpenAI
@@ -84,6 +85,11 @@ class LlmSummarizer(AbstractProcessor):  # pylint: disable=too-few-public-method
 
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
+        self._min_model_call_interval_seconds = max(
+            0.0,
+            getattr(settings, "github_models_min_interval_seconds", 0.0),
+        )
+        self._last_model_call_at: float | None = None
         # OpenAI client object - typed as Any because SDK types may vary.
         self._client: Any = OpenAI(
             api_key=settings.github_models_token,
@@ -182,6 +188,7 @@ class LlmSummarizer(AbstractProcessor):  # pylint: disable=too-few-public-method
         self, messages: list[dict[str, str]], max_tokens: int = 2048
     ) -> str:
         """Call the model and return the response string, handling SDK shapes."""
+        self._wait_for_next_model_call_slot()
         try:
             resp = self._client.chat.completions.create(
                 model=self._settings.llm_model,
@@ -213,6 +220,21 @@ class LlmSummarizer(AbstractProcessor):  # pylint: disable=too-few-public-method
         if message is not None:
             return getattr(message, "content", "") or ""
         return getattr(first, "text", "") or ""
+
+    def _wait_for_next_model_call_slot(self) -> None:
+        """Keep consecutive model calls spaced apart."""
+        if self._min_model_call_interval_seconds <= 0:
+            self._last_model_call_at = time.monotonic()
+            return
+
+        now = time.monotonic()
+        if self._last_model_call_at is not None:
+            elapsed = now - self._last_model_call_at
+            remaining = self._min_model_call_interval_seconds - elapsed
+            if remaining > 0:
+                time.sleep(remaining)
+
+        self._last_model_call_at = time.monotonic()
 
     def _summarise_item(self, item: FeedItem) -> dict[str, Any] | None:
         """Produce a compact summary for a single FeedItem.
