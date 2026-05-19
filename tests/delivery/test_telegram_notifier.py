@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from unittest.mock import Mock
 
 import requests
@@ -62,8 +63,11 @@ def test_send_renders_markdownv2_from_briefing_structure(monkeypatch) -> None:
     tn.send(message)
 
     assert payloads[0]["parse_mode"] == "MarkdownV2"
-    assert payloads[0]["text"].startswith("*AI agents \\_are\\_ here*")
-    assert "Daily Intelligence Briefing" not in payloads[0]["text"]
+    today = datetime.now(timezone.utc).date().isoformat()
+    escaped_today = today.replace("-", "\\-")
+    assert payloads[0]["text"].startswith(
+        f"📰 Daily Intelligence Briefing — {escaped_today}\n\n*AI agents \\_are\\_ here*"
+    )
     assert "*AI agents \\_are\\_ here*" in payloads[0]["text"]
     assert "• *Source:* Example\\_News" in payloads[0]["text"]
     assert "underscore\\_value" in payloads[0]["text"]

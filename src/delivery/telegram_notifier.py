@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import logging
 import re
+from datetime import datetime, timezone
 
 import requests
 
@@ -114,6 +115,9 @@ def _render_markdown_v2_message(message: str) -> str:
     if stripped == "No high-signal intelligence today.":
         return _escape_markdown_v2(stripped)
 
+    date_str = datetime.now(timezone.utc).date().isoformat()
+    header = _escape_markdown_v2(f"📰 Daily Intelligence Briefing — {date_str}")
+
     lines = message.splitlines()
     rendered_blocks: list[str] = []
     current_block: dict[str, str] = {}
@@ -155,9 +159,10 @@ def _render_markdown_v2_message(message: str) -> str:
     _flush_block()
 
     if not rendered_blocks:
-        return _escape_markdown_v2(message)
+        return f"{header}\n\n{_escape_markdown_v2(message)}".strip()
 
-    return "\n\n".join(block for block in rendered_blocks if block).strip()
+    body = "\n\n".join(block for block in rendered_blocks if block).strip()
+    return f"{header}\n\n{body}".strip()
 
 
 def _split_markdown_message(

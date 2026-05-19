@@ -47,8 +47,7 @@ Your task:
 **Original link**: <original URL>
 ---
 
-5. Do NOT add any global header line (for example, no "Daily Intelligence Briefing").
-6. If NO items pass the relevance filter, reply with a single line:
+5. If NO items pass the relevance filter, reply with a single line:
     "No high-signal intelligence today."
 """
 
