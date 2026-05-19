@@ -47,9 +47,7 @@ Your task:
 **Original link**: <original URL>
 ---
 
-5. Begin the entire output with a brief daily briefing header in English,
-    for example: "📰 Daily Intelligence Briefing — <date>"
-6. If NO items pass the relevance filter, reply with a single line:
+5. If NO items pass the relevance filter, reply with a single line:
     "No high-signal intelligence today."
 """
 
